@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import "./App.css";
 
-const API_URL = "http://localhost:5000/api/expenses";
+const rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api/expenses";
+const cleanApiUrl = rawApiUrl.replace(/\/+$/, "");
+const API_URL = cleanApiUrl.endsWith("/api/expenses") ? cleanApiUrl : `${cleanApiUrl}/api/expenses`;
 
 function App() {
   const [expenses, setExpenses] = useState([]);
