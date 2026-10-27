@@ -180,7 +180,7 @@ function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">PERSONAL FINANCE</p>
-            <h1>Dashboard - Test CI/CD</h1>
+            <h1>Dashboard </h1>
             <p className="subtitle">
               Track your spending and manage your money.
             </p>
