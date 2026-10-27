@@ -170,7 +170,7 @@ function App() {
         <div className="sidebar-bottom">
           <div className="profile-avatar">S</div>
           <div>
-            <strong>Student Account</strong>
+            <strong>Student Account - CI/CD- Test</strong>
             <p>Personal Finance</p>
           </div>
         </div>
