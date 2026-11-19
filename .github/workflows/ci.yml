@@ -6,17 +6,58 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions:
+  contents: read
+
 jobs:
-  build:
+  build-and-test:
+    name: Build and test
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint frontend
+        working-directory: client
+        run: npm run lint
+
+      - name: Build frontend
+        working-directory: client
+        env:
+          VITE_API_URL: http://localhost:5000
+        run: npm run build
+
+  docker:
+    name: Build and publish Docker images
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Validate production API URL
+        if: github.event_name == 'push'
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          if [ -z "$VITE_API_URL" ]; then
+            echo "::error::Set the VITE_API_URL repository variable to the public backend URL before pushing to main."
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -34,11 +75,67 @@ jobs:
         with:
           context: ./server
           push: ${{ github.event_name == 'push' }}
-          tags: ghcr.io/souravw28/expense-tracker-backend:latest
+          tags: |
+            ghcr.io/souravw28/expense-tracker-backend:latest
+            ghcr.io/souravw28/expense-tracker-backend:${{ github.sha }}
 
       - name: Build frontend image
         uses: docker/build-push-action@v6
         with:
           context: ./client
           push: ${{ github.event_name == 'push' }}
-          tags: ghcr.io/souravw28/expense-tracker-frontend:latest
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL || 'http://localhost:5000' }}
+          tags: |
+            ghcr.io/souravw28/expense-tracker-frontend:latest
+            ghcr.io/souravw28/expense-tracker-frontend:${{ github.sha }}
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          if [ -z "$KUBE_CONFIG" ]; then
+            echo "::error::Add the cluster kubeconfig as the KUBE_CONFIG repository secret."
+            exit 1
+          fi
+          if [ -z "$MONGO_URI" ]; then
+            echo "::error::Add the MongoDB connection string as the MONGO_URI repository secret."
+            exit 1
+          fi
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure Kubernetes access
+        uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+      - name: Configure backend MongoDB secret
+        env:
+          MONGO_URI: ${{ secrets.MONGO_URI }}
+        run: |
+          kubectl create secret generic expense-tracker-secrets \
+            --from-literal=MONGO_URI="$MONGO_URI" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy application
+        run: |
+          kubectl apply -f k8s/expense-tracker.yaml
+          kubectl set image deployment/expense-backend \
+            backend=ghcr.io/souravw28/expense-tracker-backend:${{ github.sha }}
+          kubectl set image deployment/expense-frontend \
+            frontend=ghcr.io/souravw28/expense-tracker-frontend:${{ github.sha }}
+          kubectl rollout status deployment/expense-backend --timeout=180s
+          kubectl rollout status deployment/expense-frontend --timeout=180s

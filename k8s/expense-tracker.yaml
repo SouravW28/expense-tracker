@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: expense-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: expense-backend
+  template:
+    metadata:
+      labels:
+        app: expense-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/souravw28/expense-tracker-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          env:
+            - name: PORT
+              value: "5000"
+            - name: MONGO_URI
+              valueFrom:
+                secretKeyRef:
+                  name: expense-tracker-secrets
+                  key: MONGO_URI
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-backend
+spec:
+  selector:
+    app: expense-backend
+  ports:
+    - port: 5000
+      targetPort: 5000
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: expense-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: expense-frontend
+  template:
+    metadata:
+      labels:
+        app: expense-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/souravw28/expense-tracker-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: expense-frontend
+spec:
+  type: NodePort
+  selector:
+    app: expense-frontend
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
