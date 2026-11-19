@@ -49,14 +49,13 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
-      - name: Validate production API URL
+      - name: Report frontend API URL configuration
         if: github.event_name == 'push'
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
         run: |
           if [ -z "$VITE_API_URL" ]; then
-            echo "::error::Set the VITE_API_URL repository variable to the public backend URL before pushing to main."
-            exit 1
+            echo "::warning::VITE_API_URL is not set. The frontend image will use http://localhost:5000 and is not ready for public deployment."
           fi
 
       - name: Set up Docker Buildx
@@ -93,7 +92,7 @@ jobs:
   deploy:
     name: Deploy to Kubernetes
     needs: docker
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_TO_KUBERNETES == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code

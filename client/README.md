@@ -33,9 +33,12 @@ deploy them to the Kubernetes cluster described in `k8s/expense-tracker.yaml`.
 Configure the following in the repository's **Settings → Secrets and variables
 → Actions**:
 
-- Repository variable `VITE_API_URL`: public HTTP(S) origin for the backend.
+- Optional repository variable `VITE_API_URL`: public HTTP(S) origin for the
+  backend. If it is unset, CI builds with `http://localhost:5000`; that image
+  is only suitable for build verification, not public use.
+- Repository variable `DEPLOY_TO_KUBERNETES` set to `true` to enable deployment.
 - Repository secrets `KUBE_CONFIG` and `MONGO_URI`: cluster kubeconfig and
-  MongoDB connection string.
+  MongoDB connection string, required when deployment is enabled.
 
 The cluster must be able to pull the published GHCR images (make the packages
 public or configure an image-pull secret).
